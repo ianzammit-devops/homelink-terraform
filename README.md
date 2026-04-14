@@ -111,7 +111,7 @@ terraform apply -var-file="environments/prod/prod.tfvars"
 --- 
 
 ## Lambda Endpoints
-The Lambda endpoint uses API Gateway to invoke the Lambda function. For basic security, an API key has been implemented and stored in AWS Secrets Manager, with each environment using a separate key to ensure isolation between dev and prod.
+I created **2 simple API endpoints** using API Gateway to invoke a Lambda function. For basic security, an API key is stored in AWS Secrets Manager, with each environment using a separate key to ensure isolation between dev and prod.
 
 ```
 Description: Get basic project details
@@ -130,11 +130,17 @@ curl --location 'https://<api-id>.execute-api.eu-west-2.amazonaws.com/projects' 
 
 ```
 
+## Github Actions Pipeline & Repo Configuration
+To ensure the Terraform committed to `main` contains **no secrets** and avoids common **misconfigurations**, I implemented a CI pipeline that runs **Gitleaks** for secret scanning and **tfsec** for Terraform security/configuration checks.
+
+As part of the repository configuration, I set up **branch protection** on `main`, enforced **pull requests** for all merges, and required **GitHub Actions checks** to pass before changes can be merged.
+
+---
+
 ## Planned Improvements
 - Implement JWT authentication or IP whitelisting for API endpoints to enhance security beyond API key-based access.
 - Move all IAM roles and policies into Terraform to ensure permissions are fully version-controlled, consistent across environments, and no longer managed manually within the AWS console.
 - Add rate limiting to the API endpoints to help protect against abuse, control traffic spikes, and improve overall API stability and security.
-
 
 --- 
 

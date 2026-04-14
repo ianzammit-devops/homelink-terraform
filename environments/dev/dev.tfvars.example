@@ -1,0 +1,10 @@
+my_ip_address  = "10.10.10.10/32"
+db_secret_name = "db-terraform"
+environment    = "dev"
+
+vpc_cidr_block = "10.100.0.0/16"
+subnets = {
+  "public"                 = "10.100.1.0/24",
+  "private_rds"            = "10.100.2.0/24",
+  "private_rds_redundancy" = "10.100.3.0/24" # For redundancy, required by RDS
+}

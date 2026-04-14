@@ -137,10 +137,12 @@ As part of the repository configuration, I set up **branch protection** on `main
 
 ---
 
-## Planned Improvements
+## What I'd improve next
 - Implement JWT authentication or IP whitelisting for API endpoints to enhance security beyond API key-based access.
 - Move all IAM roles and policies into Terraform to ensure permissions are fully version-controlled, consistent across environments, and no longer managed manually within the AWS console.
 - Add rate limiting to the API endpoints to help protect against abuse, control traffic spikes, and improve overall API stability and security.
+- Introduce an Application Load Balancer to distribute incoming traffic across healthy targets, improve availability, and provide a stable front end for scaling changes.
+- Configure Auto Scaling Groups so compute capacity grows and shrinks with demand, keeping the service responsive under large traffic spikes without manual intervention.
 
 --- 
 

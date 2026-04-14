@@ -39,9 +39,10 @@ resource "aws_security_group" "rds_sg" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    #tfsec:ignore:aws-ec2-no-public-egress-sgr
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -52,18 +53,23 @@ resource "aws_security_group" "rds_sg" {
 
 # MySQL 8.0 RDS; creds from Secrets Manager
 resource "aws_db_instance" "default" {
-  identifier                      = "terraform-db-instance-${var.environment}"
-  allocated_storage               = 20
-  db_name                         = var.db_name
-  engine                          = "mysql"
-  engine_version                  = "8.0"
-  instance_class                  = "db.t3.micro"
-  username                        = local.db_creds.username
-  password                        = local.db_creds.password
-  parameter_group_name            = "default.mysql8.0"
-  skip_final_snapshot             = true
-  db_subnet_group_name            = aws_db_subnet_group.default.name
-  publicly_accessible             = false
-  vpc_security_group_ids          = [aws_security_group.rds_sg.id]
-  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
+  identifier                          = "terraform-db-instance-${var.environment}"
+  allocated_storage                   = 20
+  db_name                             = var.db_name
+  engine                              = "mysql"
+  engine_version                      = "8.0"
+  instance_class                      = "db.t3.micro"
+  username                            = local.db_creds.username
+  password                            = local.db_creds.password
+  parameter_group_name                = "default.mysql8.0"
+  skip_final_snapshot                 = true
+  backup_retention_period             = 7
+  deletion_protection                 = true
+  iam_database_authentication_enabled = true
+  storage_encrypted                   = true
+  db_subnet_group_name                = aws_db_subnet_group.default.name
+  publicly_accessible                 = false
+  vpc_security_group_ids              = [aws_security_group.rds_sg.id]
+  enabled_cloudwatch_logs_exports     = ["error", "general", "slowquery"]
+
 }

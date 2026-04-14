@@ -27,6 +27,11 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Tighten Secrets Manager permissions (avoid wildcards)
+data "aws_secretsmanager_secret" "lambda_api_key" {
+  name = "lamda-${var.environment}-api-key"
+}
+
 # ✅ NEW: अनुमति to read Secrets Manager
 resource "aws_iam_role_policy" "lambda_secrets" {
   name = "lambda-secrets-policy-${var.environment}"
@@ -39,7 +44,7 @@ resource "aws_iam_role_policy" "lambda_secrets" {
       Action = [
         "secretsmanager:GetSecretValue"
       ]
-      Resource = "arn:aws:secretsmanager:*:*:secret:lamda-${var.environment}-api-key*"
+      Resource = data.aws_secretsmanager_secret.lambda_api_key.arn
     }]
   })
 }
@@ -99,11 +104,32 @@ resource "aws_apigatewayv2_route" "projects" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+# API Gateway access logs
+resource "aws_cloudwatch_log_group" "api_gw_access_logs" {
+  name              = "/aws/apigateway/api-${var.environment}"
+  retention_in_days = 30
+}
+
 # Stage
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.api.id
   name        = "$default"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gw_access_logs.arn
+    format = jsonencode({
+      requestId               = "$context.requestId"
+      ip                      = "$context.identity.sourceIp"
+      requestTime             = "$context.requestTime"
+      httpMethod              = "$context.httpMethod"
+      routeKey                = "$context.routeKey"
+      status                  = "$context.status"
+      protocol                = "$context.protocol"
+      responseLength          = "$context.responseLength"
+      integrationErrorMessage = "$context.integrationErrorMessage"
+    })
+  }
 
   tags = {
     Name        = "api-stage-${var.environment}"

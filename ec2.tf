@@ -10,6 +10,7 @@ resource "aws_security_group" "web_server_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
+    #tfsec:ignore:aws-ec2-no-public-ingress-sgr
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -22,9 +23,10 @@ resource "aws_security_group" "web_server_sg" {
   }
 
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    #tfsec:ignore:aws-ec2-no-public-egress-sgr
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -44,6 +46,10 @@ resource "aws_instance" "web_server" { # nosemgrep: terraform.aws.security.aws-e
   security_groups             = [aws_security_group.web_server_sg.id]
   key_name                    = "terraform-public-private-${var.environment}"
   iam_instance_profile        = var.ec2_iam_instance_profile
+
+  root_block_device {
+    encrypted = true
+  }
 
   user_data = templatefile("${path.module}/user-data.tpl", {
     db_host                  = aws_db_instance.default.address

@@ -23,3 +23,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+
+  terraform-plan:
+    name: Terraform Plan
+    needs: [secrets-scanning, tfsec]
+    uses: ./.github/workflows/terraform-plan.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read

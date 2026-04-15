@@ -43,7 +43,7 @@ resource "aws_instance" "web_server" { # nosemgrep: terraform.aws.security.aws-e
   instance_type               = var.ec2_instance_type
   associate_public_ip_address = true
   subnet_id                   = aws_subnet.subnets["public"].id
-  security_groups             = [aws_security_group.web_server_sg.id]
+  vpc_security_group_ids              = [aws_security_group.web_server_sg.id]
   key_name                    = "terraform-public-private-${var.environment}"
   iam_instance_profile        = var.ec2_iam_instance_profile
 
@@ -64,5 +64,6 @@ resource "aws_instance" "web_server" { # nosemgrep: terraform.aws.security.aws-e
 
   tags = {
     Name = "Apache-PHP-Web-Server-Terraform-${var.environment}"
+    Deployment = "Devops-${var.environment}"
   }
 }

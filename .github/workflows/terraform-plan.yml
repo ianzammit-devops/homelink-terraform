@@ -1,0 +1,81 @@
+name: Terraform Plan
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  plan:
+    name: Plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    # Fork PRs cannot use this repo's OIDC trust; skip to avoid failing checks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: dev
+            state_key: dev/terraform.tfstate
+          - environment: prod
+            state_key: prod/terraform.tfstate
+    environment: ${{ matrix.environment }}
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.5
+          terraform_wrapper: false
+
+      - name: Terraform fmt (check)
+        run: terraform fmt -check -recursive
+
+      - name: Prepare tfvars
+        env:
+          TFVARS_CONTENT: ${{ secrets.TFVARS }}
+        run: |
+          mkdir -p "environments/${{ matrix.environment }}"
+          TARGET="environments/${{ matrix.environment }}/${{ matrix.environment }}.tfvars"
+          if [ -n "$TFVARS_CONTENT" ]; then
+            echo "$TFVARS_CONTENT" > "$TARGET"
+          else
+            echo "::warning::Secret TFVARS is not set for environment '${{ matrix.environment }}'; using ${{ matrix.environment }}.tfvars.example (plan may not match real infra)."
+            cp "environments/${{ matrix.environment }}/${{ matrix.environment }}.tfvars.example" "$TARGET"
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: eu-west-2
+          role-session-name: github-actions-terraform-plan-${{ matrix.environment }}-${{ github.run_id }}
+
+      - name: Terraform init
+        run: terraform init -input=false -reconfigure -backend-config="key=${{ matrix.state_key }}"
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          terraform plan -no-color -input=false \
+            -var-file="environments/${{ matrix.environment }}/${{ matrix.environment }}.tfvars" \
+            -out=tfplan-${{ matrix.environment }}
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}
+          path: tfplan-${{ matrix.environment }}
+          if-no-files-found: warn

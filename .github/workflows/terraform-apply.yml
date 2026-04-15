@@ -1,0 +1,71 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to apply
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-apply-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Set state backend key
+        run: |
+          case "${{ inputs.environment }}" in
+            dev)  echo "STATE_KEY=dev/terraform.tfstate" >> "$GITHUB_ENV" ;;
+            prod) echo "STATE_KEY=prod/terraform.tfstate" >> "$GITHUB_ENV" ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.5
+          terraform_wrapper: false
+
+      - name: Prepare tfvars
+        env:
+          TFVARS_CONTENT: ${{ secrets.TFVARS }}
+        run: |
+          mkdir -p "environments/${{ inputs.environment }}"
+          TARGET="environments/${{ inputs.environment }}/${{ inputs.environment }}.tfvars"
+          if [ -n "$TFVARS_CONTENT" ]; then
+            echo "$TFVARS_CONTENT" > "$TARGET"
+          else
+            echo "::error::Secret TFVARS must be set for environment '${{ inputs.environment }}' before apply."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: eu-west-2
+          role-session-name: github-actions-terraform-apply-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Terraform init
+        run: terraform init -input=false -reconfigure -backend-config="key=$STATE_KEY"
+
+      - name: Terraform apply
+        run: |
+          terraform apply -auto-approve -no-color -input=false \
+            -var-file="environments/${{ inputs.environment }}/${{ inputs.environment }}.tfvars"

@@ -50,25 +50,59 @@ graph TB
 
 --- 
 
-## Terraform Environments
-I wanted to avoid any code duplication across environments by using a single, consistent codebase. This ensures that when changes are merged into dev and pulled down locally, everyone is working from the same version of the infrastructure, keeping everything aligned and in sync.
+## Environments
+ 
+To avoid code duplication, the infrastructure uses a single codebase across both environments. Rather than maintaining separate configurations, each environment has its own `tfvars` file that overrides the default variables, allowing dev and prod to run as completely independent stacks while staying in sync with the same underlying Terraform code.
+ 
+Each environment also has its own remote state file stored in S3, so dev and prod never interfere with each other.
+ 
+### How deployments work
+ 
+Infrastructure changes are managed entirely through GitHub Actions — Terraform is never applied manually.
+ 
+**On every push to main:**
+1. Secrets scanning and tfsec run first
+2. If both pass, a `terraform plan` runs against dev and prod in parallel
+3. The plan output is uploaded as an artifact for review
+4. The prod plan requires manual approval before it runs
+**To apply changes:**
+1. Go to Actions → Terraform Apply → Run workflow
+2. Select the target environment (`dev` or `prod`)
+3. Prod will pause for a required reviewer approval before applying
+> Note: `*.tfvars` files are gitignored and never committed. Real values are stored as GitHub environment secrets and injected at pipeline runtime.
 
-I decided to implement this by creating an environments directory with individual tfvars files. 
-
-This allows each environment to override the default variables and spin up independent infrastructure while still keeping the core configuration consistent.
-
-To make changes to the Terraform code, I switch environments by reconfiguring the remote backend.
-
-```
-DEV
-terraform init -reconfigure -backend-config="key=dev/terraform.tfstate" -var-file="environments/dev/dev.tfvars"
-terraform plan -var-file="environments/dev/dev.tfvars"
-terraform apply -var-file="environments/dev/dev.tfvars"
-
-PROD 
-terraform init -reconfigure -backend-config="key=prod/terraform.tfstate" -var-file="environments/prod/prod.tfvars"
-terraform plan -var-file="environments/prod/prod.tfvars"
-terraform apply -var-file="environments/prod/prod.tfvars"
+### Pipeline flow
+ 
+```mermaid
+flowchart TD
+    DEV[Developer Pushes Code] --> PR[Push to main]
+    PR --> SS[Secrets Scanning]
+    PR --> TS[tfsec Terraform Security Scan]
+    SS --> CHK{All Checks Passed?}
+    TS --> CHK
+    CHK -->|No| BLOCK[Pipeline Blocked]
+    CHK -->|Yes| PLAN[Terraform Plan]
+ 
+    subgraph plans[Plan Stage]
+        PDEV[Plan dev]
+        PPROD[Plan prod - requires approval]
+    end
+ 
+    PLAN --> PDEV
+    PLAN --> PPROD
+ 
+    PDEV --> ADEV[Artifact tfplan-dev]
+    PPROD --> APROD[Artifact tfplan-prod]
+ 
+    subgraph apply[Apply Stage]
+        ADEVENV[Apply dev]
+        APRODENV[Apply prod - requires approval]
+    end
+ 
+    ADEV --> ADEVENV
+    APROD --> APRODENV
+    ADEVENV --> DEVINFRA[Dev Infrastructure Updated]
+    APRODENV --> PRODINFRA[Prod Infrastructure Updated]
 ```
 
 ---
